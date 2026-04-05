@@ -1,7 +1,7 @@
 import {
     COINS,
-    PRODUCTS,
     TRAP_STATE,
+    PRODUCTS,
     buildAutomaton,
     buildDegreeTable,
     buildDotGraph,
@@ -13,13 +13,23 @@ import {
 } from "./automata.js";
 
 const ui = {
+    vendingMachine: document.getElementById("vendingMachine"),
     productSelect: document.getElementById("productSelect"),
     priceValue: document.getElementById("priceValue"),
+    insertedAmount: document.getElementById("insertedAmount"),
     coinButtons: document.getElementById("coinButtons"),
     currentState: document.getElementById("currentState"),
     sequenceValue: document.getElementById("sequenceValue"),
     statusMessage: document.getElementById("statusMessage"),
     resetButton: document.getElementById("resetButton"),
+    productWindow: document.getElementById("productWindow"),
+    trayProduct: document.getElementById("trayProduct"),
+    progressFill: document.getElementById("progressFill"),
+    machineDisplayState: document.getElementById("machineDisplayState"),
+    lightNeutral: document.getElementById("lightNeutral"),
+    lightPending: document.getElementById("lightPending"),
+    lightOk: document.getElementById("lightOk"),
+    lightError: document.getElementById("lightError"),
     alphabetValue: document.getElementById("alphabetValue"),
     initialValue: document.getElementById("initialValue"),
     stateCountValue: document.getElementById("stateCountValue"),
@@ -36,6 +46,7 @@ const state = {
     automaton: null,
     insertedCoins: [],
     simulation: null,
+    statusType: "neutral",
 };
 
 let renderNonce = 0;
@@ -44,12 +55,43 @@ function formatMoney(value) {
     return `$${value}`;
 }
 
+function getInsertedTotal() {
+    return state.insertedCoins.reduce((acc, coin) => acc + coin, 0);
+}
+
 function createProductOptions() {
     for (const product of PRODUCTS) {
         const option = document.createElement("option");
         option.value = product.id;
         option.textContent = `${product.name} (${formatMoney(product.price)})`;
         ui.productSelect.append(option);
+    }
+}
+
+function createVisualProducts() {
+    ui.productWindow.innerHTML = "";
+    for (const product of PRODUCTS) {
+        const item = document.createElement("article");
+        item.className = "machine-item";
+        item.dataset.productId = product.id;
+
+        const name = document.createElement("p");
+        name.className = "machine-item-name";
+        name.textContent = product.name;
+        item.append(name);
+
+        const price = document.createElement("span");
+        price.className = "machine-item-price";
+        price.textContent = formatMoney(product.price);
+        item.append(price);
+
+        ui.productWindow.append(item);
+    }
+}
+
+function highlightSelectedProduct() {
+    for (const item of ui.productWindow.querySelectorAll(".machine-item")) {
+        item.classList.toggle("selected", item.dataset.productId === state.selectedProduct.id);
     }
 }
 
@@ -64,9 +106,27 @@ function createCoinButtons() {
     }
 }
 
+function setStatusLight(type) {
+    const mapping = {
+        neutral: ui.lightNeutral,
+        pending: ui.lightPending,
+        ok: ui.lightOk,
+        error: ui.lightError,
+    };
+
+    for (const light of [ui.lightNeutral, ui.lightPending, ui.lightOk, ui.lightError]) {
+        light.classList.remove("active");
+    }
+
+    const light = mapping[type] ?? ui.lightNeutral;
+    light.classList.add("active");
+}
+
 function setStatus(message, type) {
+    state.statusType = type;
     ui.statusMessage.textContent = message;
     ui.statusMessage.className = `status ${type}`;
+    setStatusLight(type);
 }
 
 function isFinished() {
@@ -83,6 +143,62 @@ function updateCoinButtonsAvailability() {
     }
 }
 
+function animateCoinDrop(coin) {
+    const token = document.createElement("div");
+    token.className = "coin-fall";
+    token.textContent = coin;
+    ui.vendingMachine.append(token);
+    token.addEventListener("animationend", () => token.remove());
+}
+
+function renderTray() {
+    if (!state.simulation) {
+        return;
+    }
+
+    if (state.simulation.accepted) {
+        ui.trayProduct.className = "tray-item dispensed";
+        ui.trayProduct.textContent = state.selectedProduct.name;
+        return;
+    }
+
+    if (state.simulation.trapped) {
+        ui.trayProduct.className = "tray-item error";
+        ui.trayProduct.textContent = "Pago excedido";
+        return;
+    }
+
+    ui.trayProduct.className = "tray-item empty";
+    ui.trayProduct.textContent = "Esperando pago exacto";
+}
+
+function renderMachineProgress(inserted, target) {
+    const percent = Math.min((inserted / target) * 100, 100);
+    ui.progressFill.style.width = `${percent}%`;
+    ui.progressFill.className = "machine-progress-fill";
+    if (state.simulation?.accepted) {
+        ui.progressFill.classList.add("ok");
+    } else if (state.simulation?.trapped) {
+        ui.progressFill.classList.add("error");
+    }
+}
+
+function renderMachineDisplay() {
+    if (!state.simulation) {
+        return;
+    }
+
+    const inserted = getInsertedTotal();
+    const target = state.selectedProduct.price;
+
+    ui.machineDisplayState.textContent = labelState(state.simulation.finalState);
+    ui.priceValue.textContent = formatMoney(target);
+    ui.insertedAmount.textContent = formatMoney(inserted);
+
+    renderMachineProgress(inserted, target);
+    renderTray();
+}
+
 function updateSessionPanel() {
     if (!state.simulation) {
         return;
@@ -94,20 +210,18 @@ function updateSessionPanel() {
 
     if (state.simulation.accepted) {
         setStatus(`Aceptado: se entrega ${state.selectedProduct.name}.`, "ok");
-        updateCoinButtonsAvailability();
-        return;
+    } else if (state.simulation.trapped) {
+        setStatus("Rechazado: monto excedido. Operacion enviada al estado trampa.", "error");
+    } else if (state.insertedCoins.length === 0) {
+        setStatus("Esperando monedas.", "neutral");
+    } else {
+        const accumulated = state.simulation.finalState === TRAP_STATE ? getInsertedTotal() : state.simulation.finalState;
+        const missing = state.selectedProduct.price - accumulated;
+        setStatus(`Secuencia valida. Faltan ${formatMoney(Math.max(missing, 0))} para aceptar.`, "pending");
     }
 
-    if (state.simulation.trapped) {
-        setStatus("Rechazado: monto excedido. Operación enviada al estado trampa.", "error");
-        updateCoinButtonsAvailability();
-        return;
-    }
-
-    const accumulated = state.simulation.finalState;
-    const missing = state.selectedProduct.price - accumulated;
-    setStatus(`Secuencia válida. Faltan ${formatMoney(missing)} para aceptar.`, "pending");
     updateCoinButtonsAvailability();
+    renderMachineDisplay();
 }
 
 function renderTransitionTable() {
@@ -198,7 +312,6 @@ async function renderGraph(dot) {
 }
 
 function renderFormalDefinition() {
-    ui.priceValue.textContent = formatMoney(state.selectedProduct.price);
     ui.alphabetValue.textContent = `{${state.automaton.coins.join(", ")}}`;
     ui.initialValue.textContent = labelState(state.automaton.initialState);
     ui.stateCountValue.textContent = String(state.automaton.states.length);
@@ -220,13 +333,11 @@ function buildAutomatonForSelection(productId) {
 function resetOperation() {
     state.insertedCoins = [];
     state.simulation = simulateSequence(state.automaton, []);
-    ui.currentState.textContent = labelState(0);
-    ui.sequenceValue.textContent = "-";
-    setStatus("Esperando monedas.", "neutral");
-    updateCoinButtonsAvailability();
+    updateSessionPanel();
 }
 
 function refreshAllPanels() {
+    highlightSelectedProduct();
     renderFormalDefinition();
     renderTransitionTable();
     renderDegreeTable();
@@ -238,6 +349,8 @@ function insertCoin(coin) {
     if (!state.simulation || isFinished()) {
         return;
     }
+
+    animateCoinDrop(coin);
     state.insertedCoins.push(coin);
     state.simulation = simulateSequence(state.automaton, state.insertedCoins);
     updateSessionPanel();
@@ -250,6 +363,7 @@ function handleProductChange(event) {
 
 function init() {
     createProductOptions();
+    createVisualProducts();
     createCoinButtons();
 
     ui.productSelect.value = PRODUCTS[0].id;
