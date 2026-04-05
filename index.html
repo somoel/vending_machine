@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autómata de Máquina Expendedora</title>
+    <link rel="stylesheet" href="./static/css/styles.css">
+</head>
+<body>
+<div class="bg-orb orb-a"></div>
+<div class="bg-orb orb-b"></div>
+
+<header class="hero">
+    <p class="kicker">Teoría de autómatas aplicada</p>
+    <h1>Máquina expendedora con AFD determinista</h1>
+    <p class="subtitle">
+        Inserta monedas de valor exacto para recibir una golosina colombiana.
+    </p>
+</header>
+
+<main class="layout">
+    <section class="card" data-animate>
+        <h2>Simulador</h2>
+
+        <div class="control-row">
+            <label for="productSelect">Producto</label>
+            <select id="productSelect"></select>
+        </div>
+
+        <p class="price">Precio objetivo: <strong id="priceValue">$0</strong></p>
+
+        <div class="coin-buttons" id="coinButtons"></div>
+
+        <div class="session">
+            <p><span class="muted">Estado actual:</span> <strong id="currentState">q0</strong></p>
+            <p><span class="muted">Monedas insertadas:</span> <span id="sequenceValue">-</span></p>
+            <p id="statusMessage" class="status neutral">Esperando monedas.</p>
+        </div>
+
+        <button id="resetButton" class="btn-reset" type="button">Reiniciar operación</button>
+    </section>
+
+    <section class="card" data-animate>
+        <h2>Definición Formal</h2>
+        <ul class="formal-list">
+            <li><span>Alfabeto (Σ)</span><strong id="alphabetValue"></strong></li>
+            <li><span>Estado inicial</span><strong id="initialValue"></strong></li>
+            <li><span>Cantidad de estados</span><strong id="stateCountValue"></strong></li>
+            <li><span>Estado de aceptación</span><strong id="acceptanceValue"></strong></li>
+        </ul>
+
+        <h3>Expresión regular de secuencias válidas</h3>
+        <p class="regex-note">
+            Se evalúan cadenas con formato <code>50-100-200</code>.
+        </p>
+        <pre id="regexValue" class="regex-box"></pre>
+    </section>
+
+    <section class="card wide" data-animate>
+        <h2>Tabla de Transición</h2>
+        <div class="table-wrap">
+            <table id="transitionTable"></table>
+        </div>
+    </section>
+
+    <section class="card wide" data-animate>
+        <h2>Grado de Cada Estado</h2>
+        <div class="table-wrap">
+            <table id="degreeTable"></table>
+        </div>
+    </section>
+
+    <section class="card wide" data-animate>
+        <h2>Grafo del AFD (Graphviz)</h2>
+        <div id="graphContainer" class="graph"></div>
+        <details>
+            <summary>Ver código DOT</summary>
+            <pre id="dotCode" class="dot-code"></pre>
+        </details>
+    </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/viz.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/full.render.js"></script>
+<script type="module" src="./static/js/app.js"></script>
+</body>
+</html>
